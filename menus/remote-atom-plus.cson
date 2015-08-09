@@ -1,0 +1,14 @@
+'menu': [
+  {
+    'label': 'Packages'
+    'submenu': [
+      'label': 'Remote Atom Plus'
+      'submenu': [
+        { 'label': 'Start Server', 'command': 'remote-atom-plus:start-server' },
+        { 'label': 'Stop Server', 'command': 'remote-atom-plus:stop-server' },
+        { 'label': 'List files', 'command': 'remote-atom-plus:list-files' },
+        { 'label': 'Open file', 'command': 'remote-atom-plus:open-file' }
+      ]
+    ]
+  }
+]

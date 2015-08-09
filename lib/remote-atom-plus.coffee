@@ -172,16 +172,16 @@ module.exports =
     online: false
 
     activate: (state) ->
-        if atom.config.get "remote-atom.launch_at_startup"
+        if atom.config.get "remote-atom-plus.launch_at_startup"
             @startserver()
         atom.commands.add 'atom-workspace',
-            "remote-atom:start-server", => @startserver()
+            "remote-atom-plus:start-server", => @startserver()
         atom.commands.add 'atom-workspace',
-            "remote-atom:stop-server", => @stopserver()
+            "remote-atom-plus:stop-server", => @stopserver()
         atom.commands.add 'atom-text-editor',
-            "remote-atom:open-file", => @openFile()
+            "remote-atom-plus:open-file", => @openFile()
         atom.commands.add 'atom-workspace',
-            "remote-atom:list-files", => @listFiles()
+            "remote-atom-plus:list-files", => @listFiles()
 
     openFile: ->
         console.log "[ratom] open file"
@@ -202,7 +202,7 @@ module.exports =
 
     listFiles: ->
         console.log "[ratom] listing files"
-        dirPath = atom.config.get "remote-atom.list_path"
+        dirPath = atom.config.get "remote-atom-plus.list_path"
         if connectedSession and dirPath then connectedSession.list dirPath
         else
             console.log "[ratom] failed to list files"
@@ -227,7 +227,7 @@ module.exports =
                 console.log "[ratom] setting connected session"
                 connectedSession = session
 
-        port = atom.config.get "remote-atom.port"
+        port = atom.config.get "remote-atom-plus.port"
         @server.on 'listening', (e) =>
             @online = true
             console.log "[ratom] listening on port #{port}"
@@ -235,7 +235,7 @@ module.exports =
             if not quiet
                 status-message.display "Unable to start server", 2000
                 console.log "[ratom] unable to start server"
-            if atom.config.get "remote-atom.keep_alive"
+            if atom.config.get "remote-atom-plus.keep_alive"
                 setTimeout ( =>
                     @startserver(true)
                 ), 10000

@@ -8,6 +8,6 @@
 # For more detailed documentation see
 # https://atom.io/docs/latest/behind-atom-keymaps-in-depth
 'atom-workspace':
-  'alt-l': 'remote-atom:list-files'
+  'alt-l': 'remote-atom-plus:list-files'
 'atom-text-editor':
-  'alt-o': 'remote-atom:open-file'
+  'alt-o': 'remote-atom-plus:open-file'

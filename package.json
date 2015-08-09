@@ -1,11 +1,11 @@
 {
-  "name": "remote-atom",
-  "main": "./lib/remote-atom",
-  "version": "1.2.6",
+  "name": "remote-atom-plus",
+  "main": "./lib/remote-atom-plus",
+  "version": "0.0.1",
   "description": "Edit file directly via SSH, rmate for Atom.",
   "keywords": [
   ],
-  "repository": "https://github.com/randy3k/remote-atom",
+  "repository": "https://github.com/rafaelmaiolla/remote-atom",
   "license": "MIT",
   "engines": {
     "atom": ">=0.196.0"

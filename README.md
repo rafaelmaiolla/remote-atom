@@ -1,4 +1,4 @@
-# remote-atom
+# remote-atom-plus
 
 Remote Atom is a package for Atom which implements the Textmate's 'rmate'
 feature for Atom. It transfers files to be edited from remote server using SSH

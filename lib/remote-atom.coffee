@@ -6,17 +6,20 @@ path = require 'path'
 mkdirp = require 'mkdirp'
 randomstring = require './randomstring'
 status-message = require './status-message'
+{EventEmitter} = require 'events'
 
-class Session
-    should_parse_data: false
-    readbytes: 0
+class Session extends EventEmitter
     settings: {}
+    variables: {}
+    cmd: null
+    data: null
 
     constructor: (socket) ->
         @socket = socket
         @online = true
         socket.on "data", (chunk) =>
-            @parse_chunk(chunk)
+            if chunk
+                @parse_chunk chunk
         socket.on "close", =>
             @online = false
 
@@ -28,40 +31,50 @@ class Session
         @fd = fs.openSync(@tempfile, 'w')
 
     parse_chunk: (chunk) ->
-        if chunk
-            chunk = chunk.toString("utf8")
-            match = /\n$/.test chunk
-            chunk = chunk.replace /\n$/, ""
-            lines = chunk.split "\n"
-            for line,i in lines
-                if i < lines.length-1 or match
-                    line = line + "\n"
-                @parse_line(line)
+        chunk = chunk.toString("utf8")
+        lines = chunk.split "\n"
 
-    parse_line: (line) ->
-        if @should_parse_data
-            if @readbytes >= @datasize and line is ".\n"
-                @should_parse_data = false
-                fs.closeSync @fd
-                @open_in_atom()
-            else if @readbytes < @datasize
-                @readbytes += Buffer.byteLength(line)
-                fs.writeSync(@fd, line)
+        if not @cmd
+            @cmd = lines.shift()
+
+            while lines.length
+                line = lines.shift()
+
+                if not line.trim() then break
+
+                s = line.split ':'
+                name = s.shift().trim()
+                value = s.join(":").trim()
+                @variables[name] = value
+
+                if name == 'data'
+                    @datasize = parseInt value, 10
+                    @data = lines.join("\n").slice(0, @datasize)
+                    break
         else
-            m = line.match /([a-z\-]+?)\s*:\s*(.*?)\s*$/
-            if m and m[2]?
-                @settings[m[1]] = m[2]
-                switch m[1]
-                    when "token"
-                        @token = m[2]
-                    when "data"
-                        @datasize = parseInt(m[2],10)
-                        @should_parse_data = true
-                    when "display-name"
-                        @displayname = m[2]
-                        @remoteAddress = @displayname.split(":")[0]
-                        @basename = path.basename(@displayname.split(":")[1])
-                        @make_tempfile()
+            @data += lines.join("\n")
+            @data = @data.slice(0, @datasize)
+
+        if @data && @data.length == @datasize || not @datasize
+
+            if 'data' in @variables then del @variables['data']
+            @handle_command @cmd, @variables, @data
+            @cmd = null
+            @variables
+            @data = null
+
+    handle_command: (cmd, variables, data) ->
+        console.log "[ratom] handle command #{cmd}"
+
+        switch cmd
+            when 'open'
+                @handle_open variables, data
+            when 'list'
+                @handle_list variables, data
+                @emit 'list'
+            when 'connect'
+                @handle_connect variables, data
+                @emit 'connect'
 
     open_in_atom: ->
         console.log "[ratom] opening #{@tempfile}"
@@ -75,9 +88,46 @@ class Session
         @subscriptions.add buffer.onDidSave(@save)
         @subscriptions.add buffer.onDidDestroy(@close)
 
+    handle_open: (variables, data) ->
+        @token = variables["token"]
+        @displayname = variables["display-name"]
+        @remoteAddress = @displayname.split(":")[0]
+        @basename = path.basename(@displayname.split(":")[1])
+        @make_tempfile()
+        fs.writeSync(@fd, data)
+        fs.closeSync @fd
+        @open_in_atom()
+
+    handle_connect: (variable, data) ->
+        # TODO: Show status on status bar
+        console.log "[ratom] Connected"
+
+    handle_list: (variables, data) ->
+        @token = variables["token"]
+        @displayname = variables["display-name"]
+        # @remoteAddress = @displayname.split(":")[0]
+        @basename = "Remote files"
+        @make_tempfile()
+        fs.writeSync(@fd, data)
+        fs.closeSync @fd
+        # TODO: Close the file if the socket is closed
+        @open_in_atom()
+
     send: (cmd) ->
         if @online
             @socket.write cmd+"\n"
+
+    open: (filePath) ->
+        console.log "[open] #{filePath}"
+        @send "open"
+        @send "path: #{filePath}"
+        @send ""
+
+    list: (dirPath) ->
+        console.log "[ratom] list files"
+        @send "list"
+        @send "path: #{dirPath}"
+        @send ""
 
     save: =>
         if not @online
@@ -102,6 +152,8 @@ class Session
             @socket.end()
         @subscriptions.dispose()
 
+# TODO: Add this to the this os an object
+connectedSession = null
 
 module.exports =
     config:
@@ -113,7 +165,10 @@ module.exports =
             default: false
         port:
             type: 'integer'
-            default: 52698,
+            default: 52698
+        list_path:
+            type: 'string'
+            default: './'
     online: false
 
     activate: (state) ->
@@ -123,6 +178,34 @@ module.exports =
             "remote-atom:start-server", => @startserver()
         atom.commands.add 'atom-workspace',
             "remote-atom:stop-server", => @stopserver()
+        atom.commands.add 'atom-text-editor',
+            "remote-atom:open-file", => @openFile()
+        atom.commands.add 'atom-workspace',
+            "remote-atom:list-files", => @listFiles()
+
+    openFile: ->
+        console.log "[ratom] open file"
+
+        # Get the selected text
+        editor = atom.workspace.getActiveTextEditor()
+        text = editor.getSelectedText()
+
+        if not text
+            # Get the text from the line in the cursor position
+            text = editor.lineTextForBufferRow(editor.getCursorBufferPosition()['row'])
+
+        # TODO: parse the text so we extract a path from it
+
+        if connectedSession and text then connectedSession.open text
+        else
+            console.log "[ratom] failed to open file"
+
+    listFiles: ->
+        console.log "[ratom] listing files"
+        dirPath = atom.config.get "remote-atom.list_path"
+        if connectedSession and dirPath then connectedSession.list dirPath
+        else
+            console.log "[ratom] failed to list files"
 
     deactivate: ->
         @stopserver()
@@ -136,10 +219,13 @@ module.exports =
             if not quiet
                 status-message.display "Starting remote atom server", 2000
 
-        @server = net.createServer (socket) ->
+        @server = net.createServer (socket) =>
             console.log "[ratom] received connection from #{socket.remoteAddress}"
             session = new Session(socket)
             session.send("Atom "+atom.getVersion())
+            session.on 'connect', () =>
+                console.log "[ratom] setting connected session"
+                connectedSession = session
 
         port = atom.config.get "remote-atom.port"
         @server.on 'listening', (e) =>

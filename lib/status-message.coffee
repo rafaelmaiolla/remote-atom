@@ -1,4 +1,7 @@
 module.exports =
+    connectionStatus: (connected) ->
+        # TODO: Add connection status to status bar
+
     display: (text, timeout) ->
         clearTimeout(@timeout) if @timeout?
         @statusBarTile?.destroy()
